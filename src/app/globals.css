@@ -174,11 +174,17 @@ mark { background: var(--manila-soft); color: inherit; border-radius: 2px; paddi
 
 /* print page */
 .print-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--rule); flex-wrap: wrap; }
+.print-layout { display: flex; align-items: center; gap: 6px; }
+.print-layout button { padding: 5px 10px; border: 1px solid var(--rule); border-radius: 6px; background: transparent; font-size: .82rem; cursor: pointer; }
+.print-layout button.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
 .print-pages { max-width: 860px; margin: 24px auto; padding: 0 16px; display: grid; gap: 16px; }
 .print-pages img { width: 100%; border: 1px solid var(--rule); background: #fff; -webkit-user-drag: none; user-select: none; }
+.print-pages.combined { max-width: 1100px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); align-items: start; }
 @media print {
   .no-print { display: none !important; }
   body { background: #fff; }
   .print-pages { margin: 0; padding: 0; max-width: none; gap: 0; }
   .print-pages img { border: 0; page-break-after: always; break-after: page; max-height: 100vh; object-fit: contain; }
+  .print-pages.combined { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); align-items: center; gap: 12px; }
+  .print-pages.combined img { page-break-after: avoid; break-after: avoid; max-height: 48vh; }
 }

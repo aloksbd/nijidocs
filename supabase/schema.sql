@@ -93,8 +93,10 @@ create table public.activity (
 create index on public.activity (document_id, created_at desc);
 
 -- ───────────────────────── helpers
+-- kept as is_aal2() so every policy/function below needs no change;
+-- there's no second factor anymore, so this just checks for a signed-in session.
 create or replace function public.is_aal2() returns boolean
-language sql stable as $$ select coalesce((select auth.jwt()->>'aal') = 'aal2', false) $$;
+language sql stable as $$ select auth.uid() is not null $$;
 
 create or replace function public.is_group_member(g uuid) returns boolean
 language sql stable security definer set search_path = public as $$
@@ -185,7 +187,7 @@ begin
     select document_id, auth.uid(), 'print_link_revoked' from print_shares where id = s;
 end $$;
 
--- ───────────────────────── row level security (every policy also requires 2FA)
+-- ───────────────────────── row level security (every policy also requires a signed-in session)
 alter table public.profiles enable row level security;
 alter table public.groups enable row level security;
 alter table public.group_members enable row level security;
