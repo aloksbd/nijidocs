@@ -3,16 +3,14 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Brand, errMsg } from "./ui";
 
-type Step = "signin" | "signup" | "signup-sent" | "forgot" | "forgot-sent";
+type Step = "email" | "code";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const MIN_PASSWORD = 8;
 
 export function Auth({ onDone }: { onDone: () => void }) {
-  const [step, setStep] = useState<Step>("signin");
+  const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [password2, setPassword2] = useState("");
+  const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -21,102 +19,48 @@ export function Auth({ onDone }: { onDone: () => void }) {
     try { await fn(); } catch (err) { setError(errMsg(err)); } finally { setBusy(false); }
   };
 
-  const goto = (s: Step) => { setError(""); setPassword(""); setPassword2(""); setStep(s); };
-
-  const signIn = run(async () => {
+  const sendCode = run(async () => {
     const e = email.trim().toLowerCase();
     if (!EMAIL.test(e)) throw new Error("Enter an email address, like ram@gmail.com.");
-    const { error } = await supabase.auth.signInWithPassword({ email: e, password });
-    if (error) {
-      if (/not confirmed/i.test(error.message)) throw new Error("Confirm your email first — check your inbox for the confirmation link.");
-      throw new Error("Wrong email or password.");
-    }
+    const { error } = await supabase.auth.signInWithOtp({ email: e, options: { shouldCreateUser: true } });
+    if (error) throw error;
+    setEmail(e); setCode(""); setStep("code");
+  });
+
+  const verifyEmail = run(async () => {
+    const { error } = await supabase.auth.verifyOtp({ email, token: code.trim(), type: "email" });
+    if (error) throw new Error("That code didn't work. Check you entered the newest one, or send a new code.");
     onDone();
-  });
-
-  const signUp = run(async () => {
-    const e = email.trim().toLowerCase();
-    if (!EMAIL.test(e)) throw new Error("Enter an email address, like ram@gmail.com.");
-    if (password.length < MIN_PASSWORD) throw new Error(`Use a password with at least ${MIN_PASSWORD} characters.`);
-    if (password !== password2) throw new Error("Those passwords don't match.");
-    const { error } = await supabase.auth.signUp({
-      email: e, password,
-      options: { emailRedirectTo: `${location.origin}/` },
-    });
-    if (error) throw error;
-    setEmail(e); setStep("signup-sent");
-  });
-
-  const forgot = run(async () => {
-    const e = email.trim().toLowerCase();
-    if (!EMAIL.test(e)) throw new Error("Enter an email address, like ram@gmail.com.");
-    const { error } = await supabase.auth.resetPasswordForEmail(e, { redirectTo: `${location.origin}/reset-password` });
-    if (error) throw error;
-    setEmail(e); setStep("forgot-sent");
   });
 
   return (
     <main className="gate">
       <div className="gate-card">
         <Brand />
-        {step === "signin" && (
-          <form className="stack" onSubmit={signIn}>
+        {step === "email" && (
+          <form className="stack" onSubmit={sendCode}>
             <div><h1>Sign in</h1><p className="muted">Your family&apos;s documents, encrypted so only you and the people you choose can open them.</p></div>
             <label className="field"><span>Email address</span>
               <input className="input" type="email" inputMode="email" autoComplete="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
             </label>
-            <label className="field"><span>Password</span>
-              <input className="input" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+            {error && <p className="error">{error}</p>}
+            <button className="btn btn-primary" disabled={busy}>Send code</button>
+            <p className="hint">New email addresses create an account. We&apos;ll email you a sign-in code.</p>
+          </form>
+        )}
+        {step === "code" && (
+          <form className="stack" onSubmit={verifyEmail}>
+            <div><h1>Check your email</h1><p className="muted">We sent a code to {email}. It can take a minute; check spam too.</p></div>
+            <label className="field"><span>Code from the email</span>
+              <input className="input num" inputMode="numeric" autoComplete="one-time-code" maxLength={10} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} autoFocus />
             </label>
             {error && <p className="error">{error}</p>}
-            <button className="btn btn-primary" disabled={busy || !password}>Sign in</button>
+            <button className="btn btn-primary" disabled={busy || code.length < 6}>Verify</button>
             <div className="spread">
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => goto("signup")}>Create an account</button>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => goto("forgot")}>Forgot password?</button>
+              <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={sendCode}>Send a new code</button>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setStep("email")}>Use a different email</button>
             </div>
           </form>
-        )}
-        {step === "signup" && (
-          <form className="stack" onSubmit={signUp}>
-            <div><h1>Create an account</h1><p className="muted">We&apos;ll email you a link to confirm your address.</p></div>
-            <label className="field"><span>Email address</span>
-              <input className="input" type="email" inputMode="email" autoComplete="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
-            </label>
-            <label className="field"><span>Password</span>
-              <input className="input" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
-            </label>
-            <label className="field"><span>Confirm password</span>
-              <input className="input" type="password" autoComplete="new-password" value={password2} onChange={(e) => setPassword2(e.target.value)} />
-            </label>
-            {error && <p className="error">{error}</p>}
-            <button className="btn btn-primary" disabled={busy}>Create account</button>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={() => goto("signin")}>Already have an account? Sign in</button>
-          </form>
-        )}
-        {step === "signup-sent" && (
-          <>
-            <h1>Check your email</h1>
-            <p className="muted">We sent a confirmation link to {email}. Click it, then come back and sign in.</p>
-            <button className="btn btn-ghost btn-sm" onClick={() => goto("signin")}>Back to sign in</button>
-          </>
-        )}
-        {step === "forgot" && (
-          <form className="stack" onSubmit={forgot}>
-            <div><h1>Reset your password</h1><p className="muted">We&apos;ll email you a link to set a new password.</p></div>
-            <label className="field"><span>Email address</span>
-              <input className="input" type="email" inputMode="email" autoComplete="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
-            </label>
-            {error && <p className="error">{error}</p>}
-            <button className="btn btn-primary" disabled={busy}>Send reset link</button>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={() => goto("signin")}>Back to sign in</button>
-          </form>
-        )}
-        {step === "forgot-sent" && (
-          <>
-            <h1>Check your email</h1>
-            <p className="muted">We sent a password reset link to {email}. It can take a minute; check spam too.</p>
-            <button className="btn btn-ghost btn-sm" onClick={() => goto("signin")}>Back to sign in</button>
-          </>
         )}
       </div>
     </main>

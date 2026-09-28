@@ -5,8 +5,8 @@ share with family or colleagues, and send a 15-minute print link to a print shop
 Everything is encrypted in your browser before it's uploaded.
 
 Stack: Next.js 15 on Vercel (free Hobby plan) + Supabase (free plan). OCR runs on-device
-(Tesseract, English + Nepali). Account emails (signup confirmation, password reset) are sent
-through Brevo's free plan, so the whole stack runs on free tiers.
+(Tesseract, English + Nepali). Sign-in codes are sent by email through Brevo's free plan,
+so the whole stack runs on free tiers.
 
 ---
 
@@ -32,13 +32,13 @@ connect Brevo's free plan instead (around 300 emails a day at the time of writin
    - Host `smtp-relay.brevo.com`, port `587`
    - Username: your Brevo SMTP login. Password: the SMTP key.
    - Sender email: the address you verified. Sender name: `NijiDocs`.
-4. **Authentication → Emails → Templates**: sign-in is email + password now, so email is only
-   sent for **Confirm signup** and **Reset Password** — leave both on Supabase's default template
-   (the `{{ .ConfirmationURL }}` link), just adjust the branding/subject if you like. Don't switch
-   them to a token/code style; nothing in the app reads a code from these emails anymore.
-5. **Authentication → URL Configuration → Redirect URLs**: add `<your-site>/reset-password`
-   (e.g. `https://nijidocs.vercel.app/reset-password`), and `http://localhost:3000/reset-password`
-   if you also run it locally — this is where the "forgot password" email link sends people.
+4. **Authentication → Emails → Templates**: the app signs in with a code, not a link, so edit
+   both **Confirm signup** and **Magic Link** to show the code. For example:
+   - Subject: `Your NijiDocs sign-in code`
+   - Body: `<p>Your code is <b>{{ .Token }}</b></p><p>It expires in 1 hour. If you didn't try to sign in, ignore this email.</p>`
+5. **Authentication → Rate Limits**: raise *emails sent per hour* to something like 30.
+6. **Authentication → Providers → Email**: consider lowering *Email OTP expiration* to
+   600 seconds (10 minutes).
 
 ### 3. Vercel (hosting)
 1. Push this folder to a GitHub repository.
@@ -61,9 +61,10 @@ Run locally: `cp .env.example .env.local`, fill it in, `npm install`, `npm run d
 
 ## How it works
 
-**Signing in:** email and password. Creating an account sends a confirmation link by email
-(one email, not per sign-in); forgetting a password sends a reset link. Every database rule
-still checks that you're signed in.
+**Signing in:** a code sent to your email. There is no password to remember. Because signing
+in only proves you control the email inbox, the vault passphrase is what actually protects the
+documents: someone who gets into your email can sign in, but still can't open anything without
+your passphrase.
 
 **Mobile numbers:** when setting up the vault, each person enters their mobile number. Family
 members use it to add each other to groups. Only one account can hold a number, but the number
@@ -108,6 +109,17 @@ link off at any time, and every open is logged.
   flat photos work best.
 - Passkeys are not included yet (Supabase doesn't offer passkey sign-in natively).
 - Mobile numbers are not verified (see above).
+- Two-step sign-in (authenticator app) is off for now so everyone can use it. It can be turned
+  back on later without changing how documents are encrypted.
+
+## Already ran an earlier schema with two-step sign-in?
+Run this once in the SQL editor. It keeps the old function name so every existing rule keeps
+working, but now only requires a signed-in user:
+```sql
+create or replace function public.is_aal2() returns boolean
+language sql stable as $$ select (select auth.uid()) is not null $$;
+```
+Anyone who already set up an authenticator simply won't be asked for it anymore.
 
 ## Already ran the old phone-login schema?
 Run this once in the SQL editor instead of re-running the whole file:
