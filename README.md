@@ -118,6 +118,16 @@ working, but now only requires a signed-in user:
 ```sql
 create or replace function public.is_aal2() returns boolean
 language sql stable as $$ select (select auth.uid()) is not null $$;
+
+insert into public.profiles (id, email)
+select id, email from auth.users on conflict (id) do nothing;
+
+create or replace function public.ensure_profile() returns void
+language sql security definer set search_path = public as $$
+  insert into profiles (id, email) select id, email from auth.users where id = auth.uid()
+  on conflict (id) do nothing
+$$;
+revoke execute on function public.ensure_profile() from anon;
 ```
 Anyone who already set up an authenticator simply won't be asked for it anymore.
 

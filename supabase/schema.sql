@@ -142,6 +142,15 @@ end $$;
 create trigger on_auth_user_created after insert on auth.users
   for each row execute function public.handle_new_user();
 
+-- safety net: create my profile if the sign-up trigger didn't (e.g. account made before this schema ran)
+create or replace function public.ensure_profile() returns void
+language sql security definer set search_path = public as $$
+  insert into profiles (id, email)
+  select id, email from auth.users where id = auth.uid()
+  on conflict (id) do nothing
+$$;
+revoke execute on function public.ensure_profile() from anon;
+
 -- look up a person by phone to add to a group (exact match only)
 create or replace function public.find_user_by_phone(p text)
 returns table (id uuid, display_name text, public_key text)

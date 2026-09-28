@@ -32,8 +32,16 @@ function useVaultState() {
   const loadProfile = useCallback(async () => {
     const { data: u } = await supabase.auth.getUser();
     if (!u.user) return null;
-    const { data, error } = await supabase.from("profiles").select("*").eq("id", u.user.id).single();
+    let { data, error } = await supabase.from("profiles").select("*").eq("id", u.user.id).maybeSingle();
     if (error) throw error;
+    if (!data) {
+      // Account created before the database was set up: make the profile now
+      const r = await supabase.rpc("ensure_profile");
+      if (r.error) throw new Error("The database isn't set up yet. Run supabase/schema.sql in the Supabase SQL editor.");
+      ({ data, error } = await supabase.from("profiles").select("*").eq("id", u.user.id).maybeSingle());
+      if (error) throw error;
+      if (!data) throw new Error("Your profile can't be read. Run the latest supabase/schema.sql (see README, “Already ran an earlier schema”).");
+    }
     setProfile(data as Profile);
     return data as Profile;
   }, []);
