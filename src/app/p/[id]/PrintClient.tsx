@@ -16,6 +16,7 @@ export function PrintClient({ id }: { id: string }) {
   const [files, setFiles] = useState<PlainFile[] | null>(null);
   const [error, setError] = useState("");
   const [now, setNow] = useState(Date.now());
+  const [combined, setCombined] = useState(false);
 
   const load = useCallback(async () => {
     const key = new URLSearchParams(location.hash.slice(1)).get("k");
@@ -81,11 +82,17 @@ export function PrintClient({ id }: { id: string }) {
       <header className="print-top no-print">
         <div><b>{meta?.name ?? "Document"}</b><div className="small muted">{urls ? `${urls.length} page${urls.length === 1 ? "" : "s"}` : "Decrypting…"}</div></div>
         <div className="row">
+          {urls && urls.length > 1 && (
+            <div className="print-layout" role="group" aria-label="Print layout">
+              <button type="button" className={combined ? "" : "on"} onClick={() => setCombined(false)}>Separate pages</button>
+              <button type="button" className={combined ? "on" : ""} onClick={() => setCombined(true)}>All on one page</button>
+            </div>
+          )}
           <span className="small">Available for <span className="timer">{Math.floor(left / 60)}:{String(left % 60).padStart(2, "0")}</span></span>
           <button className="btn btn-primary" disabled={!urls} onClick={() => window.print()}>Print</button>
         </div>
       </header>
-      <div className="print-pages">
+      <div className={`print-pages${combined ? " combined" : ""}`}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         {urls ? urls.map((u, i) => <img key={i} src={u} alt={`Page ${i + 1}`} draggable={false} />) : <div className="row muted no-print"><Spinner /> Decrypting on this computer…</div>}
       </div>
